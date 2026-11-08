@@ -1,0 +1,128 @@
+name: Build Pithaya APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Assemble Android project from the flat files in the repo
+        run: |
+          set -e
+          APP=build_app
+          mkdir -p $APP/app/src/main/java/com/pithaya/app
+          mkdir -p $APP/app/src/main/res/drawable
+          mkdir -p $APP/app/src/main/assets
+
+          cp MainActivity.java PixelEyeView.java $APP/app/src/main/java/com/pithaya/app/
+          cp AndroidManifest.xml $APP/app/src/main/AndroidManifest.xml
+          if [ -f font.ttf ]; then cp font.ttf $APP/app/src/main/assets/font.ttf; fi
+          if [ -f font.otf ]; then cp font.otf $APP/app/src/main/assets/font.otf; fi
+
+          cat > $APP/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Pithaya"
+          include ':app'
+          EOF
+
+          cat > $APP/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.5.0' apply false
+          }
+          EOF
+
+          cat > $APP/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2g
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat > $APP/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.pithaya.app'
+              compileSdk 34
+              defaultConfig {
+                  applicationId 'com.pithaya.app'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName '1.0'
+              }
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          EOF
+
+          cat > $APP/app/src/main/res/drawable/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="27"
+              android:viewportHeight="27">
+              <path android:fillColor="#000000" android:pathData="M0,0h27v27h-27z"/>
+              <path android:fillColor="#A50E0E" android:pathData="M9,8h9v1h-9z M6,9h3v1h-3z M18,9h3v1h-3z M4,10h2v1h-2z M21,10h2v1h-2z M3,11h1v1h-1z M23,11h1v1h-1z M2,12h1v1h-1z M24,12h1v1h-1z M1,13h1v1h-1z M25,13h1v1h-1z M2,14h1v1h-1z M24,14h1v1h-1z M3,15h1v1h-1z M23,15h1v1h-1z M4,16h2v1h-2z M21,16h2v1h-2z M6,17h3v1h-3z M18,17h3v1h-3z M9,18h9v1h-9z"/>
+              <path android:fillColor="#E2D6D0" android:pathData="M9,9h9v1h-9z M6,10h15v1h-15z M4,11h19v1h-19z M3,12h21v1h-21z M2,13h23v1h-23z M3,14h21v1h-21z M4,15h19v1h-19z M6,16h15v1h-15z M9,17h9v1h-9z"/>
+              <path android:fillColor="#C20A0A" android:pathData="M11,10h5v1h-5z M10,11h7v5h-7z M11,16h5v1h-5z"/>
+              <path android:fillColor="#000000" android:pathData="M12,12h3v3h-3z"/>
+              <path android:fillColor="#FFFFFF" android:pathData="M11,12h1v1h-1z"/>
+          </vector>
+          EOF
+
+      - name: Build debug APK
+        working-directory: build_app
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: cp build_app/app/build/outputs/apk/debug/app-debug.apk Pithaya.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pithaya-apk
+          path: Pithaya.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Pithaya build ${{ github.run_number }}
+          files: Pithaya.apk
