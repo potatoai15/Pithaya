@@ -19,9 +19,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
         with:
-          gradle-version: '8.7'
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Assemble Android project from the flat files in the repo
         run: |
